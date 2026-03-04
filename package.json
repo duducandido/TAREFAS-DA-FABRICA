@@ -1,0 +1,12 @@
+{
+  "name": "adm-tarefas-fabrica",
+  "version": "1.0.0",
+  "description": "Sistema de Gestão de Equipe Premium",
+  "main": "index.html",
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  },
+  "scripts": {
+    "start": "serve ."
+  }
+}
