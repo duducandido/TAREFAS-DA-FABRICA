@@ -183,6 +183,16 @@ body {
     margin-bottom: 2rem;
 }
 
+.header-clock {
+    margin-right: auto;
+    margin-left: 2rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    letter-spacing: 1px;
+    color: var(--text-main);
+}
+
 .search-bar {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);

@@ -95,7 +95,7 @@ function switchView(viewId) {
     if (viewId === 'productivity') renderProductivity();
 }
 
-// Helper Functions for Initials/Colors
+// Helper Functions
 function getInitials(name) {
     if (!name || name === 'Visitante') return 'V';
     return name.split(' ')
@@ -107,7 +107,7 @@ function getInitials(name) {
 
 function getUserColor(name) {
     const colors = [
-        '#2563eb', '#7c3aed', '#db2777', '#dc2626',
+        '#38bdf8', '#7c3aed', '#db2777', '#dc2626',
         '#ea580c', '#ca8a04', '#16a34a', '#0891b2'
     ];
     let hash = 0;
@@ -129,6 +129,8 @@ function updateCounters() {
 
 // Render Tasks
 function renderTasks(filter = '') {
+    if (!todoList || !progressList || !doneList) return;
+
     todoList.innerHTML = '';
     progressList.innerHTML = '';
     doneList.innerHTML = '';
@@ -150,8 +152,8 @@ function renderTasks(filter = '') {
     filteredTasks.forEach(task => {
         const card = createTaskCard(task);
         if (task.status === 'todo') todoList.appendChild(card);
-        if (task.status === 'in-progress') progressList.appendChild(card);
-        if (task.status === 'done') doneList.appendChild(card);
+        else if (task.status === 'in-progress') progressList.appendChild(card);
+        else if (task.status === 'done') doneList.appendChild(card);
     });
 
     updateCounters();
@@ -207,7 +209,7 @@ function createTaskCard(task) {
     return div;
 }
 
-// Task Handlers
+// Handlers
 async function saveTasks(task, method = 'POST') {
     try {
         const response = await fetch('/api/tasks', {
@@ -219,7 +221,7 @@ async function saveTasks(task, method = 'POST') {
         await loadTasksFromServer();
     } catch (error) {
         console.error('Erro:', error);
-        notifyUser('Erro ao salvar no banco de dados');
+        notifyUser('Erro no banco de dados. Tente novamente.');
     }
 }
 
@@ -252,13 +254,36 @@ async function moveTask(id) {
             particleCount: 150,
             spread: 70,
             origin: { y: 0.6 },
-            colors: ['#3b82f6', '#10b981', '#f59e0b']
+            colors: ['#38bdf8', '#10b981', '#f59e0b']
         });
         notifyUser('🎉 Parabéns! Tarefa concluída!');
     } else {
         notifyUser('Tarefa movida!');
     }
 }
+
+// Global scope for onclicks
+window.editTask = function (id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    editingTaskId = id;
+    document.querySelector('.modal-header h3').textContent = 'Editar Tarefa';
+
+    document.getElementById('task-title').value = task.title;
+    document.getElementById('task-description').value = task.description || '';
+    document.getElementById('task-priority').value = task.priority;
+    document.getElementById('task-assignee').value = task.assignee;
+    document.getElementById('task-start-date').value = task.startDate || '';
+    document.getElementById('task-end-date').value = task.endDate || '';
+    document.getElementById('task-start-time').value = task.startTime || '';
+    document.getElementById('task-end-time').value = task.endTime || '';
+
+    taskModal.style.display = 'flex';
+};
+
+window.deleteTask = deleteTask;
+window.moveTask = moveTask;
 
 function renderMyTasks() {
     const list = document.getElementById('my-tasks-list');
@@ -285,7 +310,7 @@ function renderTeam() {
     const assignees = [...new Set(tasks.map(t => t.assignee).filter(name => name && name !== 'Membro'))];
 
     if (assignees.length === 0) {
-        grid.innerHTML = '<p class="text-muted" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Aguardando atribuição de tarefas para exibir a equipe.</p>';
+        grid.innerHTML = '<p class="text-muted" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Aguardando equipe.</p>';
         return;
     }
 
@@ -341,107 +366,69 @@ function updateProductivityStats() {
     if (efficiencyEl) efficiencyEl.textContent = `${efficiency}%`;
 }
 
-// Global Edit function (needs to be global for onclick)
-window.editTask = function (id) {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-
-    editingTaskId = id;
-    document.querySelector('.modal-header h3').textContent = 'Editar Tarefa';
-
-    document.getElementById('task-title').value = task.title;
-    document.getElementById('task-description').value = task.description || '';
-    document.getElementById('task-priority').value = task.priority;
-    document.getElementById('task-assignee').value = task.assignee;
-    document.getElementById('task-start-date').value = task.startDate || '';
-    document.getElementById('task-end-date').value = task.endDate || '';
-    document.getElementById('task-start-time').value = task.startTime || '';
-    document.getElementById('task-end-time').value = task.endTime || '';
-
-    taskModal.style.display = 'flex';
-};
-
-// Event Listeners setup
 function setupEventListeners() {
-    // Modal
-    openModalBtn.onclick = () => {
-        taskModal.style.display = 'flex';
-        taskForm.reset();
-        editingTaskId = null;
-        document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
+    if (openModalBtn) {
+        openModalBtn.onclick = () => {
+            taskModal.style.display = 'flex';
+            taskForm.reset();
+            editingTaskId = null;
+            document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
 
-        const now = new Date();
-        const dateString = now.toISOString().split('T')[0];
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const timeString = `${hours}:${minutes}`;
+            const now = new Date();
+            const dateString = now.toISOString().split('T')[0];
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
 
-        document.getElementById('task-start-date').value = dateString;
-        document.getElementById('task-start-time').value = timeString;
-        document.getElementById('task-end-date').value = dateString;
+            document.getElementById('task-start-date').value = dateString;
+            document.getElementById('task-start-time').value = `${hours}:${minutes}`;
+            document.getElementById('task-end-date').value = dateString;
 
-        const endHours = String((now.getHours() + 1) % 24).padStart(2, '0');
-        document.getElementById('task-end-time').value = `${endHours}:${minutes}`;
-        document.getElementById('task-assignee').value = currentUser;
-    };
+            const nextHour = String((now.getHours() + 1) % 24).padStart(2, '0');
+            document.getElementById('task-end-time').value = `${nextHour}:${minutes}`;
+            document.getElementById('task-assignee').value = currentUser;
+        };
+    }
 
-    closeModalBtn.onclick = () => taskModal.style.display = 'none';
+    if (closeModalBtn) closeModalBtn.onclick = () => taskModal.style.display = 'none';
     window.onclick = (e) => { if (e.target === taskModal) taskModal.style.display = 'none'; };
 
-    taskForm.onsubmit = async (e) => {
-        e.preventDefault();
+    if (taskForm) {
+        taskForm.onsubmit = async (e) => {
+            e.preventDefault();
 
-        const title = document.getElementById('task-title').value;
-        const description = document.getElementById('task-description').value;
-        const priority = document.getElementById('task-priority').value;
-        const assignee = document.getElementById('task-assignee').value || 'Membro';
-        const startDate = document.getElementById('task-start-date').value;
-        const endDate = document.getElementById('task-end-date').value;
-        const startTime = document.getElementById('task-start-time').value;
-        const endTime = document.getElementById('task-end-time').value;
+            const taskData = {
+                title: document.getElementById('task-title').value,
+                description: document.getElementById('task-description').value,
+                priority: document.getElementById('task-priority').value,
+                assignee: document.getElementById('task-assignee').value || 'Membro',
+                startDate: document.getElementById('task-start-date').value,
+                endDate: document.getElementById('task-end-date').value,
+                startTime: document.getElementById('task-start-time').value,
+                endTime: document.getElementById('task-end-time').value
+            };
 
-        if (startDate && endDate) {
-            const startStr = `${startDate}T${startTime || '00:00'}`;
-            const endStr = `${endDate}T${endTime || '23:59'}`;
-            if (new Date(startStr) >= new Date(endStr)) {
-                alert('Erro: A data/horário de término deve ser posterior ao início!');
-                return;
+            if (editingTaskId) {
+                const updatedTask = { ...tasks.find(t => t.id === editingTaskId), ...taskData };
+                await saveTasks(updatedTask, 'PUT');
+                editingTaskId = null;
+            } else {
+                const newTask = { ...taskData, id: Date.now().toString(), status: 'todo' };
+                await saveTasks(newTask, 'POST');
             }
-        }
 
-        if (editingTaskId) {
-            const task = {
-                ...tasks.find(t => t.id === editingTaskId),
-                title, description, priority, assignee, startDate, endDate, startTime, endTime
-            };
-            await saveTasks(task, 'PUT');
-            notifyUser('Tarefa atualizada!');
-            editingTaskId = null;
-        } else {
-            const newTask = {
-                id: Date.now().toString(),
-                title, description, priority, assignee, startDate, endDate, startTime, endTime,
-                status: 'todo'
-            };
-            await saveTasks(newTask, 'POST');
-            notifyUser('Tarefa criada com sucesso!');
-        }
+            taskForm.reset();
+            taskModal.style.display = 'none';
+        };
+    }
 
-        taskForm.reset();
-        taskModal.style.display = 'none';
-    };
-
-    themeToggle.onclick = () => {
-        document.body.classList.toggle('light-theme');
-        const icon = themeToggle.querySelector('i');
-        if (document.body.classList.contains('light-theme')) {
-            icon.className = 'fas fa-sun';
-            localStorage.setItem('theme', 'light');
-        } else {
-            icon.className = 'fas fa-moon';
-            localStorage.setItem('theme', 'dark');
-        }
-    };
+    if (themeToggle) {
+        themeToggle.onclick = () => {
+            document.body.classList.toggle('light-theme');
+            localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+            const icon = themeToggle.querySelector('i');
+            if (icon) icon.className = document.body.classList.contains('light-theme') ? 'fas fa-sun' : 'fas fa-moon';
+        };
+    }
 
     filters.forEach(filter => {
         filter.onclick = () => {
@@ -459,76 +446,49 @@ function setupEventListeners() {
         };
     });
 
-    if (localStorage.getItem('theme') === 'light') {
-        document.body.classList.add('light-theme');
-        themeToggle.querySelector('i').className = 'fas fa-sun';
-    }
-
     if (logoutBtn) {
         logoutBtn.onclick = (e) => {
             e.preventDefault();
-            if (confirm('Deseja sair do sistema?')) {
+            if (confirm('Deseja sair?')) {
                 localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('userEmail');
-                localStorage.removeItem('userName');
                 window.location.href = 'login.html';
             }
         };
     }
 
-    searchInput.oninput = (e) => renderTasks(e.target.value);
+    if (searchInput) {
+        searchInput.oninput = (e) => renderTasks(e.target.value);
+    }
 }
 
-// Drag & Drop
-window.allowDrop = function (ev) {
+// Global Drag Handlers
+window.allowDrop = (ev) => ev.preventDefault();
+window.drop = async (ev) => {
     ev.preventDefault();
+    const id = ev.dataTransfer.getData('text/plain');
+    const targetStatus = ev.currentTarget.id;
+    const task = tasks.find(t => t.id === id);
+    if (task && task.status !== targetStatus) {
+        task.status = targetStatus;
+        await saveTasks(task, 'PUT');
+    }
 };
 
-document.querySelectorAll('.column').forEach(column => {
-    column.ondragenter = (e) => column.classList.add('drag-over');
-    column.ondragleave = (e) => column.classList.remove('drag-over');
-    column.ondrop = async (e) => {
-        e.preventDefault();
-        column.classList.remove('drag-over');
-        const id = e.dataTransfer.getData('text/plain');
-        const targetStatus = column.id;
-
-        const task = tasks.find(t => t.id === id);
-        if (task && task.status !== targetStatus) {
-            task.status = targetStatus;
-            await saveTasks(task, 'PUT');
-            if (targetStatus === 'done') {
-                confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 } });
-                notifyUser('🎉 Excelente trabalho!');
-            } else {
-                notifyUser('Status atualizado');
-            }
-        }
-    };
-});
-
-// Utilities
 function calculateDuration(startDate, startTime, endDate, endTime) {
-    if (!startDate || !startTime || !endDate || !endTime) return 'Duração N/A';
+    if (!startDate || !startTime || !endDate || !endTime) return 'N/A';
     const start = new Date(`${startDate}T${startTime}`);
     const end = new Date(`${endDate}T${endTime}`);
     let diff = Math.floor((end - start) / 1000 / 60);
-    if (diff < 0) return 'Inválido';
-    const days = Math.floor(diff / (24 * 60));
-    diff = diff % (24 * 60);
-    const hours = Math.floor(diff / 60);
-    const mins = diff % 60;
-    let res = '';
-    if (days > 0) res += `${days}d `;
-    if (hours > 0) res += `${hours}h `;
-    if (mins > 0 || (days === 0 && hours === 0)) res += `${mins}m`;
-    return res.trim();
+    if (diff < 0) return 'Erro';
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function notifyUser(msg) {
     const toast = document.createElement('div');
     toast.className = 'toast-notification';
-    toast.innerHTML = `<i class="fas fa-check-circle"></i> <span>${msg}</span>`;
+    toast.innerHTML = `<i class="fas fa-info-circle"></i> <span>${msg}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.classList.add('show'), 100);
     setTimeout(() => {
@@ -537,5 +497,5 @@ function notifyUser(msg) {
     }, 3000);
 }
 
-// Start app
+// Start
 init();
