@@ -29,13 +29,18 @@ async function loadTasksFromServer() {
         const response = await fetch('/api/tasks');
         if (response.ok) {
             tasks = await response.json();
-            renderTasks();
+            renderAllViews();
             updateProductivityStats();
         }
     } catch (error) {
-        console.error('Erro ao carregar tarefas:', error);
-        notifyUser('Erro ao conectar com o servidor.');
+        console.error('Erro ao carregar:', error);
     }
+}
+
+function renderAllViews() {
+    renderTasks(searchInput ? searchInput.value : '');
+    renderMyTasks();
+    renderTeam();
 }
 
 // Initialize
@@ -44,17 +49,17 @@ async function init() {
 
     const nameEl = document.querySelector('.user-profile .user-name');
     const statusEl = document.querySelector('.user-profile .user-status');
-    const avatarEl = document.getElementById('user-avatar');
+    const avatarImg = document.getElementById('user-avatar');
 
     if (nameEl) nameEl.textContent = currentUser;
-    if (statusEl) statusEl.textContent = currentUser === 'Visitante' ? 'Acesso Convidado' : 'Membro da Equipe';
+    if (statusEl) statusEl.textContent = currentUser === 'Visitante' ? 'Convidado' : 'Equipe Zello';
 
-    if (avatarEl) {
+    if (avatarImg) {
         const initialsCircle = document.createElement('div');
         initialsCircle.className = 'user-avatar-initials';
         initialsCircle.style.backgroundColor = getUserColor(currentUser);
         initialsCircle.textContent = getInitials(currentUser);
-        avatarEl.parentNode.replaceChild(initialsCircle, avatarEl);
+        avatarImg.parentNode.replaceChild(initialsCircle, avatarImg);
     }
 
     setupEventListeners();
@@ -74,13 +79,15 @@ function updateClock() {
 function switchView(viewId) {
     views.forEach(v => v.classList.remove('active'));
     navItems.forEach(n => n.classList.remove('active'));
+
     const viewEl = document.getElementById(`view-${viewId}`);
     const navEl = document.getElementById(`nav-${viewId}`);
+
     if (viewEl) viewEl.classList.add('active');
     if (navEl) navEl.classList.add('active');
-    if (viewId === 'my-tasks') renderMyTasks();
-    if (viewId === 'team') renderTeam();
-    if (viewId === 'productivity') renderProductivity();
+
+    // Make sure data is fresh when switching
+    renderAllViews();
 }
 
 function getInitials(name) {
@@ -89,35 +96,35 @@ function getInitials(name) {
 }
 
 function getUserColor(name) {
-    const colors = ['#38bdf8', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2'];
+    const colors = ['#0ea5e9', '#6366f1', '#ec4899', '#f43f5e', '#f59e0b', '#84cc16', '#10b981', '#06b6d4'];
     let hash = 0;
     for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
 }
 
 function updateCounters() {
-    const todo = tasks.filter(t => t.status === 'todo').length;
-    const progress = tasks.filter(t => t.status === 'in-progress').length;
-    const done = tasks.filter(t => t.status === 'done').length;
-    if (document.getElementById('count-todo')) document.getElementById('count-todo').textContent = todo;
-    if (document.getElementById('count-progress')) document.getElementById('count-progress').textContent = progress;
-    if (document.getElementById('count-done')) document.getElementById('count-done').textContent = done;
+    if (document.getElementById('count-todo')) document.getElementById('count-todo').textContent = tasks.filter(t => t.status === 'todo').length;
+    if (document.getElementById('count-progress')) document.getElementById('count-progress').textContent = tasks.filter(t => t.status === 'in-progress').length;
+    if (document.getElementById('count-done')) document.getElementById('count-done').textContent = tasks.filter(t => t.status === 'done').length;
 }
 
-function renderTasks(filter = '') {
+function renderTasks(filterText = '') {
     if (!todoList || !progressList || !doneList) return;
     todoList.innerHTML = '';
     progressList.innerHTML = '';
     doneList.innerHTML = '';
 
-    const filterActive = document.querySelector('.filter.active');
-    const currentFilter = filterActive ? filterActive.textContent : 'Todos';
+    const activeF = document.querySelector('.filter.active');
+    const filter = activeF ? activeF.textContent : 'Todos';
 
-    const filtered = tasks.filter(t =>
-        (t.title.toLowerCase().includes(filter.toLowerCase()) ||
-            (t.description && t.description.toLowerCase().includes(filter.toLowerCase()))) &&
-        (currentFilter === 'Todos' || (currentFilter === 'Urgentes' && t.priority === 'high') || (currentFilter === 'Pendentes' && t.status !== 'done'))
-    );
+    const filtered = tasks.filter(t => {
+        const matchesSearch = t.title.toLowerCase().includes(filterText.toLowerCase()) ||
+            (t.description && t.description.toLowerCase().includes(filterText.toLowerCase()));
+        const matchesCategory = filter === 'Todos' ||
+            (filter === 'Urgentes' && t.priority === 'high') ||
+            (filter === 'Pendentes' && t.status !== 'done');
+        return matchesSearch && matchesCategory;
+    });
 
     filtered.forEach(task => {
         const card = createTaskCard(task);
@@ -131,17 +138,9 @@ function renderTasks(filter = '') {
 function createTaskCard(task) {
     const div = document.createElement('div');
     div.className = 'task-card';
-    if (task.startDate && task.endDate) {
-        const start = new Date(`${task.startDate}T${task.startTime || '00:00'}`);
-        const end = new Date(`${task.endDate}T${task.endTime || '23:59'}`);
-        if (!isNaN(start) && !isNaN(end) && (end - start) / (1000 * 60 * 60 * 24) >= 3) {
-            div.classList.add('task-long-duration');
-        }
-    }
     div.draggable = true;
     div.dataset.id = task.id;
 
-    // Drag data
     div.ondragstart = (e) => {
         e.dataTransfer.setData('text/plain', task.id);
         div.classList.add('dragging');
@@ -149,25 +148,20 @@ function createTaskCard(task) {
     div.ondragend = () => div.classList.remove('dragging');
 
     div.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: start;">
+        <div class="task-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
             <span class="task-priority priority-${task.priority}">${task.priority}</span>
-            ${div.classList.contains('task-long-duration') ? '<span style="font-size: 0.65rem; color: #f59e0b; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> Longa</span>' : ''}
         </div>
-        <h3>${task.title}</h3>
-        <p class="task-description">${task.description || ''}</p>
-        <div class="task-date-time">
-            <span><i class="fas fa-calendar-alt"></i> ${task.startDate || ''}</span>
-            ${task.startTime ? `<span><i class="fas fa-clock"></i> ${task.startTime} - ${task.endTime || ''}</span>` : ''}
-        </div>
-        <div class="task-footer">
-            <div class="task-assignee">
+        <h3 style="margin-bottom: 0.5rem; font-size: 1rem;">${task.title}</h3>
+        <p class="task-description" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">${task.description || ''}</p>
+        <div class="task-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--glass-border); padding-top: 0.8rem;">
+            <div class="task-assignee" style="display: flex; align-items: center; gap: 0.5rem;">
                 <div class="user-avatar-circle" style="background-color: ${getUserColor(task.assignee)}">${getInitials(task.assignee)}</div>
-                <span>${task.assignee}</span>
+                <span style="font-size: 0.8rem;">${task.assignee}</span>
             </div>
-            <div class="task-actions">
-                <i class="fas fa-edit" onclick="editTask('${task.id}')"></i>
-                <i class="fas fa-trash" onclick="deleteTask('${task.id}')"></i>
-                <i class="fas fa-arrow-right" onclick="moveTask('${task.id}')"></i>
+            <div class="task-actions" style="display: flex; gap: 0.8rem; color: var(--text-muted);">
+                <i class="fas fa-edit" style="cursor: pointer;" onclick="editTask('${task.id}')"></i>
+                <i class="fas fa-trash" style="cursor: pointer;" onclick="deleteTask('${task.id}')"></i>
+                <i class="fas fa-arrow-right" style="cursor: pointer;" onclick="moveTask('${task.id}')"></i>
             </div>
         </div>
     `;
@@ -175,46 +169,37 @@ function createTaskCard(task) {
 }
 
 async function saveTasks(task, method = 'POST') {
+    // Filter out _id to prevent MongoDB errors
+    const payload = { ...task };
+    delete payload._id;
+
     try {
         const response = await fetch('/api/tasks', {
             method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(task)
+            body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Erro ao sincronizar');
-        }
+        if (!response.ok) throw new Error('Falha ao salvar');
         await loadTasksFromServer();
     } catch (error) {
-        console.error('Save Error:', error);
-        notifyUser('Erro: ' + error.message);
+        console.error('Erro:', error);
+        notifyUser('Erro ao salvar no banco.');
     }
 }
 
 window.moveTask = async function (id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
-    const order = ['todo', 'in-progress', 'done', 'todo'];
-    task.status = order[order.indexOf(task.status) + 1];
-
-    // Feedback visual imediato
-    renderTasks(searchInput.value);
+    const nextMap = { 'todo': 'in-progress', 'in-progress': 'done', 'done': 'todo' };
+    task.status = nextMap[task.status];
+    renderAllViews(); // UI update
     await saveTasks(task, 'PUT');
-
-    if (task.status === 'done') {
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#38bdf8', '#10b981', '#f59e0b'] });
-        notifyUser('🎉 Concluída!');
-    }
 };
 
 window.deleteTask = async function (id) {
-    if (confirm('Deseja excluir?')) {
+    if (confirm('Excluir tarefa?')) {
         const response = await fetch(`/api/tasks?id=${id}`, { method: 'DELETE' });
-        if (response.ok) {
-            await loadTasksFromServer();
-            notifyUser('Excluída!');
-        }
+        if (response.ok) await loadTasksFromServer();
     }
 };
 
@@ -229,8 +214,6 @@ window.editTask = function (id) {
     document.getElementById('task-assignee').value = task.assignee;
     document.getElementById('task-start-date').value = task.startDate || '';
     document.getElementById('task-end-date').value = task.endDate || '';
-    document.getElementById('task-start-time').value = task.startTime || '';
-    document.getElementById('task-end-time').value = task.endTime || '';
     taskModal.style.display = 'flex';
 };
 
@@ -239,9 +222,8 @@ function setupEventListeners() {
         taskModal.style.display = 'flex';
         taskForm.reset();
         editingTaskId = null;
-        document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
-        const now = new Date();
-        document.getElementById('task-start-date').value = now.toISOString().split('T')[0];
+        document.querySelector('.modal-header h3').textContent = 'Nova Tarefa';
+        document.getElementById('task-start-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('task-assignee').value = currentUser;
     };
     if (closeModalBtn) closeModalBtn.onclick = () => taskModal.style.display = 'none';
@@ -256,33 +238,24 @@ function setupEventListeners() {
                 assignee: document.getElementById('task-assignee').value || 'Membro',
                 startDate: document.getElementById('task-start-date').value,
                 endDate: document.getElementById('task-end-date').value,
-                startTime: document.getElementById('task-start-time').value,
-                endTime: document.getElementById('task-end-time').value
+                startTime: document.getElementById('task-start-time') ? document.getElementById('task-start-time').value : '',
+                endTime: document.getElementById('task-end-time') ? document.getElementById('task-end-time').value : ''
             };
             if (editingTaskId) await saveTasks({ ...tasks.find(t => t.id == editingTaskId), ...data }, 'PUT');
             else await saveTasks({ ...data, id: Date.now().toString(), status: 'todo' }, 'POST');
-            taskForm.reset();
             taskModal.style.display = 'none';
         };
     }
 
-    // Drag & Drop Listeners
     document.querySelectorAll('.column').forEach(column => {
         column.addEventListener('dragover', (e) => e.preventDefault());
-        column.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            column.classList.add('drag-over');
-        });
-        column.addEventListener('dragleave', () => column.classList.remove('drag-over'));
         column.addEventListener('drop', async (e) => {
             e.preventDefault();
-            column.classList.remove('drag-over');
             const id = e.dataTransfer.getData('text/plain');
-            const target = column.id;
             const task = tasks.find(t => t.id == id);
-            if (task && task.status !== target) {
-                task.status = target;
-                renderTasks(searchInput.value); // Atualiza UI na hora
+            if (task && task.status !== column.id) {
+                task.status = column.id;
+                renderAllViews();
                 await saveTasks(task, 'PUT');
             }
         });
@@ -291,8 +264,8 @@ function setupEventListeners() {
     if (themeToggle) themeToggle.onclick = () => {
         document.body.classList.toggle('light-theme');
         localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
-        const icon = themeToggle.querySelector('i');
-        if (icon) icon.className = document.body.classList.contains('light-theme') ? 'fas fa-sun' : 'fas fa-moon';
+        const i = themeToggle.querySelector('i');
+        if (i) i.className = document.body.classList.contains('light-theme') ? 'fas fa-sun' : 'fas fa-moon';
     };
 
     filters.forEach(f => f.onclick = () => {
@@ -306,7 +279,7 @@ function setupEventListeners() {
         switchView(i.id.replace('nav-', ''));
     });
 
-    if (logoutBtn) logoutBtn.onclick = () => { localStorage.removeItem('isLoggedIn'); window.location.href = 'login.html'; };
+    if (logoutBtn) logoutBtn.onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
     if (searchInput) searchInput.oninput = (e) => renderTasks(e.target.value);
 }
 
@@ -322,7 +295,7 @@ function renderMyTasks() {
     if (!list) return;
     list.innerHTML = '';
     const my = tasks.filter(t => t.assignee === currentUser);
-    if (my.length === 0) list.innerHTML = '<p class="text-muted">Sem tarefas.</p>';
+    if (my.length === 0) list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhuma tarefa para você.</p>';
     else my.forEach(t => list.appendChild(createTaskCard(t)));
 }
 
@@ -330,11 +303,11 @@ function renderTeam() {
     const grid = document.getElementById('team-stats-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    const members = [...new Set(tasks.map(t => t.assignee))];
-    members.forEach(m => {
+    const team = [...new Set(tasks.map(t => t.assignee))];
+    team.forEach(m => {
         const card = document.createElement('div');
         card.className = 'team-card';
-        card.innerHTML = `<div class="team-avatar-circle" style="background-color: ${getUserColor(m)}">${getInitials(m)}</div><h3>${m}</h3>`;
+        card.innerHTML = `<div class="team-avatar-circle" style="background-color:${getUserColor(m)}">${getInitials(m)}</div><h3 style="text-align:center">${m}</h3>`;
         grid.appendChild(card);
     });
 }
