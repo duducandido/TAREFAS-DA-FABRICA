@@ -485,8 +485,8 @@ body {
 }
 
 .priority-medium {
-    background: rgba(245, 158, 11, 0.1);
-    color: #f59e0b;
+    background: rgba(31, 245, 11, 0.938);
+    color: #0bf50b;
 }
 
 .priority-low {
