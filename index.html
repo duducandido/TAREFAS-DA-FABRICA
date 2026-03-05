@@ -31,6 +31,8 @@
                 <a href="#" class="nav-item" id="nav-my-tasks"><i class="fas fa-tasks"></i> Minhas Tarefas</a>
                 <a href="#" class="nav-item" id="nav-team"><i class="fas fa-users"></i> Equipe</a>
                 <a href="#" class="nav-item" id="nav-productivity"><i class="fas fa-chart-line"></i> Produtividade</a>
+                <a href="#" class="nav-item logout-link" style="margin-top: auto; color: #ef4444;" id="logout-btn"><i
+                        class="fas fa-sign-out-alt"></i> Sair</a>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-profile">
@@ -73,7 +75,7 @@
                     <div class="column" id="todo" ondrop="drop(event)" ondragover="allowDrop(event)">
                         <div class="column-header">
                             <h2>🚀 A Fazer</h2>
-                            <span class="task-count">0</span>
+                            <span class="task-count" id="count-todo">0</span>
                         </div>
                         <div class="task-list" id="todo-list"></div>
                     </div>
@@ -82,7 +84,7 @@
                     <div class="column" id="in-progress" ondrop="drop(event)" ondragover="allowDrop(event)">
                         <div class="column-header">
                             <h2>⚡ Em Progresso</h2>
-                            <span class="task-count">0</span>
+                            <span class="task-count" id="count-progress">0</span>
                         </div>
                         <div class="task-list" id="progress-list"></div>
                     </div>
@@ -91,7 +93,7 @@
                     <div class="column" id="done" ondrop="drop(event)" ondragover="allowDrop(event)">
                         <div class="column-header">
                             <h2>✅ Concluído</h2>
-                            <span class="task-count">0</span>
+                            <span class="task-count" id="count-done">0</span>
                         </div>
                         <div class="task-list" id="done-list"></div>
                     </div>

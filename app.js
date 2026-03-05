@@ -4,7 +4,7 @@ if (!localStorage.getItem('isLoggedIn') && !window.location.href.includes('login
 }
 
 // State Management
-const currentUser = 'Eduardo';
+let currentUser = localStorage.getItem('userName') || 'Eduardo';
 const teamMembers = [
     { name: 'Eduardo', role: 'Líder do Time', photo: 'Eduardo' },
     { name: 'Julia', role: 'Designer UI/UX', photo: 'Julia' },
@@ -43,12 +43,24 @@ const themeToggle = document.getElementById('theme-toggle');
 const filters = document.querySelectorAll('.filter');
 const navItems = document.querySelectorAll('.nav-item');
 const views = document.querySelectorAll('.app-view');
+const logoutBtn = document.getElementById('logout-btn');
 
 // Sound Effects (Web Audio API or simple Audio objects)
 // We'll use a small "ping" for notifications later if desired, but let's stick to visuals for now to avoid large assets.
 
 // Initialize
 async function init() {
+    currentUser = localStorage.getItem('userName') || 'Visitante';
+
+    // Update Sidebar Profiling
+    const nameEl = document.querySelector('.user-profile .user-name');
+    const statusEl = document.querySelector('.user-profile .user-status');
+    const avatarEl = document.getElementById('user-avatar');
+
+    if (nameEl) nameEl.textContent = currentUser;
+    if (statusEl) statusEl.textContent = currentUser === 'Visitante' ? 'Acesso Convidado' : 'Membro da Equipe';
+    if (avatarEl) avatarEl.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser}`;
+
     setupEventListeners();
     await loadTasksFromServer();
 
@@ -97,6 +109,16 @@ function renderTasks(filter = '') {
     });
 
     updateCounters();
+}
+
+function updateCounters() {
+    const todoCount = tasks.filter(t => t.status === 'todo').length;
+    const progressCount = tasks.filter(t => t.status === 'in-progress').length;
+    const doneCount = tasks.filter(t => t.status === 'done').length;
+
+    if (document.getElementById('count-todo')) document.getElementById('count-todo').textContent = todoCount;
+    if (document.getElementById('count-progress')) document.getElementById('count-progress').textContent = progressCount;
+    if (document.getElementById('count-done')) document.getElementById('count-done').textContent = doneCount;
 }
 
 // Create Task Card element
@@ -361,10 +383,22 @@ function setupEventListeners() {
         };
     });
 
-    // Check saved theme
     if (localStorage.getItem('theme') === 'light') {
         document.body.classList.add('light-theme');
         themeToggle.querySelector('i').className = 'fas fa-sun';
+    }
+
+    // Logout
+    if (logoutBtn) {
+        logoutBtn.onclick = (e) => {
+            e.preventDefault();
+            if (confirm('Deseja sair do sistema?')) {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+                localStorage.removeItem('userName');
+                window.location.href = 'login.html';
+            }
+        };
     }
 
     // Search
