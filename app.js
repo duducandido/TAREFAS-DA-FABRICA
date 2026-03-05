@@ -8,6 +8,21 @@ let currentUser = localStorage.getItem('userName') || 'Eduardo';
 let tasks = [];
 let editingTaskId = null;
 
+// Selectors
+const todoList = document.getElementById('todo-list');
+const progressList = document.getElementById('progress-list');
+const doneList = document.getElementById('done-list');
+const taskForm = document.getElementById('task-form');
+const taskModal = document.getElementById('task-modal');
+const openModalBtn = document.getElementById('open-modal-btn');
+const closeModalBtn = document.querySelector('.close');
+const searchInput = document.getElementById('search-input');
+const themeToggle = document.getElementById('theme-toggle');
+const filters = document.querySelectorAll('.filter');
+const navItems = document.querySelectorAll('.nav-item');
+const views = document.querySelectorAll('.app-view');
+const logoutBtn = document.getElementById('logout-btn');
+
 // Load Tasks from MongoDB
 async function loadTasksFromServer() {
     try {
@@ -24,23 +39,6 @@ async function loadTasksFromServer() {
         notifyUser('Conectando ao banco de dados...');
     }
 }
-// Selectors
-const todoList = document.getElementById('todo-list');
-const progressList = document.getElementById('progress-list');
-const doneList = document.getElementById('done-list');
-const taskForm = document.getElementById('task-form');
-const taskModal = document.getElementById('task-modal');
-const openModalBtn = document.getElementById('open-modal-btn');
-const closeModalBtn = document.querySelector('.close');
-const searchInput = document.getElementById('search-input');
-const themeToggle = document.getElementById('theme-toggle');
-const filters = document.querySelectorAll('.filter');
-const navItems = document.querySelectorAll('.nav-item');
-const views = document.querySelectorAll('.app-view');
-const logoutBtn = document.getElementById('logout-btn');
-
-// Sound Effects (Web Audio API or simple Audio objects)
-// We'll use a small "ping" for notifications later if desired, but let's stick to visuals for now to avoid large assets.
 
 // Initialize
 async function init() {
@@ -53,7 +51,15 @@ async function init() {
 
     if (nameEl) nameEl.textContent = currentUser;
     if (statusEl) statusEl.textContent = currentUser === 'Visitante' ? 'Acesso Convidado' : 'Membro da Equipe';
-    if (avatarEl) avatarEl.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser}`;
+
+    // Update Sidebar Avatar (with initials)
+    if (avatarEl) {
+        const initialsCircle = document.createElement('div');
+        initialsCircle.className = 'user-avatar-initials';
+        initialsCircle.style.backgroundColor = getUserColor(currentUser);
+        initialsCircle.textContent = getInitials(currentUser);
+        avatarEl.parentNode.replaceChild(initialsCircle, avatarEl);
+    }
 
     setupEventListeners();
     await loadTasksFromServer();
@@ -78,29 +84,63 @@ function switchView(viewId) {
     views.forEach(v => v.classList.remove('active'));
     navItems.forEach(n => n.classList.remove('active'));
 
-    document.getElementById(`view-${viewId}`).classList.add('active');
-    document.getElementById(`nav-${viewId}`).classList.add('active');
+    const viewEl = document.getElementById(`view-${viewId}`);
+    const navEl = document.getElementById(`nav-${viewId}`);
+
+    if (viewEl) viewEl.classList.add('active');
+    if (navEl) navEl.classList.add('active');
 
     if (viewId === 'my-tasks') renderMyTasks();
     if (viewId === 'team') renderTeam();
     if (viewId === 'productivity') renderProductivity();
 }
 
+// Helper Functions for Initials/Colors
+function getInitials(name) {
+    if (!name || name === 'Visitante') return 'V';
+    return name.split(' ')
+        .map(n => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+}
+
+function getUserColor(name) {
+    const colors = [
+        '#2563eb', '#7c3aed', '#db2777', '#dc2626',
+        '#ea580c', '#ca8a04', '#16a34a', '#0891b2'
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
+function updateCounters() {
+    const todoCount = tasks.filter(t => t.status === 'todo').length;
+    const progressCount = tasks.filter(t => t.status === 'in-progress').length;
+    const doneCount = tasks.filter(t => t.status === 'done').length;
+
+    if (document.getElementById('count-todo')) document.getElementById('count-todo').textContent = todoCount;
+    if (document.getElementById('count-progress')) document.getElementById('count-progress').textContent = progressCount;
+    if (document.getElementById('count-done')) document.getElementById('count-done').textContent = doneCount;
+}
+
 // Render Tasks
 function renderTasks(filter = '') {
-    // Clear lists
     todoList.innerHTML = '';
     progressList.innerHTML = '';
     doneList.innerHTML = '';
 
-    const currentFilter = document.querySelector('.filter.active').textContent;
+    const filterActive = document.querySelector('.filter.active');
+    const currentFilter = filterActive ? filterActive.textContent : 'Todos';
 
     let filteredTasks = tasks.filter(task =>
         task.title.toLowerCase().includes(filter.toLowerCase()) ||
         task.description.toLowerCase().includes(filter.toLowerCase())
     );
 
-    // Apply category filters
     if (currentFilter === 'Urgentes') {
         filteredTasks = filteredTasks.filter(t => t.priority === 'high');
     } else if (currentFilter === 'Pendentes') {
@@ -117,22 +157,10 @@ function renderTasks(filter = '') {
     updateCounters();
 }
 
-function updateCounters() {
-    const todoCount = tasks.filter(t => t.status === 'todo').length;
-    const progressCount = tasks.filter(t => t.status === 'in-progress').length;
-    const doneCount = tasks.filter(t => t.status === 'done').length;
-
-    if (document.getElementById('count-todo')) document.getElementById('count-todo').textContent = todoCount;
-    if (document.getElementById('count-progress')) document.getElementById('count-progress').textContent = progressCount;
-    if (document.getElementById('count-done')) document.getElementById('count-done').textContent = doneCount;
-}
-
-// Create Task Card element
 function createTaskCard(task) {
     const div = document.createElement('div');
     div.className = 'task-card';
 
-    // Check for long duration (3+ days)
     if (task.startDate && task.endDate) {
         const start = new Date(`${task.startDate}T${task.startTime || '00:00'}`);
         const end = new Date(`${task.endDate}T${task.endTime || '23:59'}`);
@@ -146,6 +174,8 @@ function createTaskCard(task) {
     div.ondragstart = (e) => e.dataTransfer.setData('text/plain', task.id);
 
     const isLong = div.classList.contains('task-long-duration');
+    const initials = getInitials(task.assignee);
+    const userColor = getUserColor(task.assignee);
 
     div.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -162,7 +192,9 @@ function createTaskCard(task) {
         </div>
         <div class="task-footer">
             <div class="task-assignee">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee}" alt="${task.assignee}">
+                <div class="user-avatar-circle" style="background-color: ${userColor}">
+                    ${initials}
+                </div>
                 <span>${task.assignee}</span>
             </div>
             <div class="task-actions">
@@ -175,7 +207,7 @@ function createTaskCard(task) {
     return div;
 }
 
-// Save / Update to MongoDB
+// Task Handlers
 async function saveTasks(task, method = 'POST') {
     try {
         const response = await fetch('/api/tasks', {
@@ -191,7 +223,6 @@ async function saveTasks(task, method = 'POST') {
     }
 }
 
-// Task Actions
 async function deleteTask(id) {
     if (confirm('Deseja excluir esta tarefa?')) {
         try {
@@ -221,7 +252,7 @@ async function moveTask(id) {
             particleCount: 150,
             spread: 70,
             origin: { y: 0.6 },
-            colors: ['#4f46e5', '#a855f7', '#10b981']
+            colors: ['#3b82f6', '#10b981', '#f59e0b']
         });
         notifyUser('🎉 Parabéns! Tarefa concluída!');
     } else {
@@ -231,6 +262,7 @@ async function moveTask(id) {
 
 function renderMyTasks() {
     const list = document.getElementById('my-tasks-list');
+    if (!list) return;
     list.innerHTML = '';
     const myTasks = tasks.filter(t => t.assignee === currentUser);
 
@@ -250,7 +282,6 @@ function renderTeam() {
     if (!grid) return;
     grid.innerHTML = '';
 
-    // Extract unique assignees from existing tasks
     const assignees = [...new Set(tasks.map(t => t.assignee).filter(name => name && name !== 'Membro'))];
 
     if (assignees.length === 0) {
@@ -267,7 +298,9 @@ function renderTeam() {
         const card = document.createElement('div');
         card.className = 'team-card';
         card.innerHTML = `
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${name}" alt="${name}">
+            <div class="team-avatar-circle" style="background-color: ${getUserColor(name)}">
+                ${getInitials(name)}
+            </div>
             <h3>${name}</h3>
             <span class="role">${name === currentUser ? 'Você' : 'Membro da Equipe'}</span>
             <div class="progress-bar-container">
@@ -299,12 +332,36 @@ function updateProductivityStats() {
         }
     });
 
-    document.getElementById('stat-total-done').textContent = done;
-    document.getElementById('stat-hours-planned').textContent = `${Math.floor(totalMinutes / 60)}h`;
-    document.getElementById('stat-efficiency').textContent = `${efficiency}%`;
+    const totalDoneEl = document.getElementById('stat-total-done');
+    const hoursPlannedEl = document.getElementById('stat-hours-planned');
+    const efficiencyEl = document.getElementById('stat-efficiency');
+
+    if (totalDoneEl) totalDoneEl.textContent = done;
+    if (hoursPlannedEl) hoursPlannedEl.textContent = `${Math.floor(totalMinutes / 60)}h`;
+    if (efficiencyEl) efficiencyEl.textContent = `${efficiency}%`;
 }
 
-// Event Listeners
+// Global Edit function (needs to be global for onclick)
+window.editTask = function (id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    editingTaskId = id;
+    document.querySelector('.modal-header h3').textContent = 'Editar Tarefa';
+
+    document.getElementById('task-title').value = task.title;
+    document.getElementById('task-description').value = task.description || '';
+    document.getElementById('task-priority').value = task.priority;
+    document.getElementById('task-assignee').value = task.assignee;
+    document.getElementById('task-start-date').value = task.startDate || '';
+    document.getElementById('task-end-date').value = task.endDate || '';
+    document.getElementById('task-start-time').value = task.startTime || '';
+    document.getElementById('task-end-time').value = task.endTime || '';
+
+    taskModal.style.display = 'flex';
+};
+
+// Event Listeners setup
 function setupEventListeners() {
     // Modal
     openModalBtn.onclick = () => {
@@ -313,32 +370,24 @@ function setupEventListeners() {
         editingTaskId = null;
         document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
 
-        // Auto-fill current date and time
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
+        const dateString = now.toISOString().split('T')[0];
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-
-        const dateString = `${year}-${month}-${day}`;
         const timeString = `${hours}:${minutes}`;
 
         document.getElementById('task-start-date').value = dateString;
         document.getElementById('task-start-time').value = timeString;
         document.getElementById('task-end-date').value = dateString;
 
-        // Default end time is 1 hour later
         const endHours = String((now.getHours() + 1) % 24).padStart(2, '0');
         document.getElementById('task-end-time').value = `${endHours}:${minutes}`;
-
-        // Auto-fill assignee with current user
         document.getElementById('task-assignee').value = currentUser;
     };
+
     closeModalBtn.onclick = () => taskModal.style.display = 'none';
     window.onclick = (e) => { if (e.target === taskModal) taskModal.style.display = 'none'; };
 
-    // Form Submit
     taskForm.onsubmit = async (e) => {
         e.preventDefault();
 
@@ -351,7 +400,6 @@ function setupEventListeners() {
         const startTime = document.getElementById('task-start-time').value;
         const endTime = document.getElementById('task-end-time').value;
 
-        // Validation: End must be after start
         if (startDate && endDate) {
             const startStr = `${startDate}T${startTime || '00:00'}`;
             const endStr = `${endDate}T${endTime || '23:59'}`;
@@ -362,21 +410,17 @@ function setupEventListeners() {
         }
 
         if (editingTaskId) {
-            const task = { ...tasks.find(t => t.id === editingTaskId), title, description, priority, assignee, startDate, endDate, startTime, endTime };
+            const task = {
+                ...tasks.find(t => t.id === editingTaskId),
+                title, description, priority, assignee, startDate, endDate, startTime, endTime
+            };
             await saveTasks(task, 'PUT');
             notifyUser('Tarefa atualizada!');
             editingTaskId = null;
         } else {
             const newTask = {
                 id: Date.now().toString(),
-                title,
-                description,
-                priority,
-                assignee,
-                startDate,
-                endDate,
-                startTime,
-                endTime,
+                title, description, priority, assignee, startDate, endDate, startTime, endTime,
                 status: 'todo'
             };
             await saveTasks(newTask, 'POST');
@@ -385,10 +429,8 @@ function setupEventListeners() {
 
         taskForm.reset();
         taskModal.style.display = 'none';
-        document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
     };
 
-    // Theme Toggle
     themeToggle.onclick = () => {
         document.body.classList.toggle('light-theme');
         const icon = themeToggle.querySelector('i');
@@ -401,20 +443,14 @@ function setupEventListeners() {
         }
     };
 
-    // Filters
     filters.forEach(filter => {
         filter.onclick = () => {
-            // Animate click
-            filter.style.transform = 'scale(0.95)';
-            setTimeout(() => filter.style.transform = 'scale(1)', 100);
-
             filters.forEach(f => f.classList.remove('active'));
             filter.classList.add('active');
             renderTasks(searchInput.value);
         };
     });
 
-    // Sidebar Navigation
     navItems.forEach(item => {
         item.onclick = (e) => {
             e.preventDefault();
@@ -428,7 +464,6 @@ function setupEventListeners() {
         themeToggle.querySelector('i').className = 'fas fa-sun';
     }
 
-    // Logout
     if (logoutBtn) {
         logoutBtn.onclick = (e) => {
             e.preventDefault();
@@ -441,84 +476,60 @@ function setupEventListeners() {
         };
     }
 
-    // Search
     searchInput.oninput = (e) => renderTasks(e.target.value);
 }
 
 // Drag & Drop
-function allowDrop(ev) {
+window.allowDrop = function (ev) {
     ev.preventDefault();
-}
+};
 
-// Add these to make the columns highlight
 document.querySelectorAll('.column').forEach(column => {
     column.ondragenter = (e) => column.classList.add('drag-over');
     column.ondragleave = (e) => column.classList.remove('drag-over');
-});
+    column.ondrop = async (e) => {
+        e.preventDefault();
+        column.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('text/plain');
+        const targetStatus = column.id;
 
-async function drop(ev) {
-    ev.preventDefault();
-    ev.currentTarget.classList.remove('drag-over');
-    const id = ev.dataTransfer.getData('text/plain');
-    const targetStatus = ev.currentTarget.id; // e.g., 'todo', 'in-progress'
-
-    const task = tasks.find(t => t.id === id);
-    if (task) {
-        const oldStatus = task.status;
-        task.status = targetStatus;
-
-        if (oldStatus !== 'done' && targetStatus === 'done') {
-            confetti({
-                particleCount: 100,
-                spread: 60,
-                origin: { y: 0.7 }
-            });
-            notifyUser('🎉 Excelente trabalho!');
-        } else {
-            notifyUser('Status atualizado');
+        const task = tasks.find(t => t.id === id);
+        if (task && task.status !== targetStatus) {
+            task.status = targetStatus;
+            await saveTasks(task, 'PUT');
+            if (targetStatus === 'done') {
+                confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 } });
+                notifyUser('🎉 Excelente trabalho!');
+            } else {
+                notifyUser('Status atualizado');
+            }
         }
-
-        await saveTasks(task, 'PUT');
-        renderTasks(searchInput.value);
-        updateProductivityStats();
-    }
-}
+    };
+});
 
 // Utilities
 function calculateDuration(startDate, startTime, endDate, endTime) {
     if (!startDate || !startTime || !endDate || !endTime) return 'Duração N/A';
-
     const start = new Date(`${startDate}T${startTime}`);
     const end = new Date(`${endDate}T${endTime}`);
-
-    let diffInMinutes = Math.floor((end - start) / 1000 / 60);
-
-    if (diffInMinutes < 0) return 'Inválido';
-
-    const days = Math.floor(diffInMinutes / (24 * 60));
-    diffInMinutes = diffInMinutes % (24 * 60);
-
-    const hours = Math.floor(diffInMinutes / 60);
-    const mins = diffInMinutes % 60;
-
-    let result = '';
-    if (days > 0) result += `${days}d `;
-    if (hours > 0) result += `${hours}h `;
-    if (mins > 0 || (days === 0 && hours === 0)) result += `${mins}m`;
-
-    return result.trim();
+    let diff = Math.floor((end - start) / 1000 / 60);
+    if (diff < 0) return 'Inválido';
+    const days = Math.floor(diff / (24 * 60));
+    diff = diff % (24 * 60);
+    const hours = Math.floor(diff / 60);
+    const mins = diff % 60;
+    let res = '';
+    if (days > 0) res += `${days}d `;
+    if (hours > 0) res += `${hours}h `;
+    if (mins > 0 || (days === 0 && hours === 0)) res += `${mins}m`;
+    return res.trim();
 }
 
 function notifyUser(msg) {
     const toast = document.createElement('div');
     toast.className = 'toast-notification';
-    toast.innerHTML = `
-        <i class="fas fa-check-circle"></i>
-        <span>${msg}</span>
-    `;
+    toast.innerHTML = `<i class="fas fa-check-circle"></i> <span>${msg}</span>`;
     document.body.appendChild(toast);
-
-    // Fade in and out
     setTimeout(() => toast.classList.add('show'), 100);
     setTimeout(() => {
         toast.classList.remove('show');
