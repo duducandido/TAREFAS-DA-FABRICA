@@ -7,6 +7,7 @@ if (!localStorage.getItem('isLoggedIn') && !window.location.href.includes('login
 let currentUser = localStorage.getItem('userName') || 'Eduardo';
 let tasks = [];
 let editingTaskId = null;
+let currentMemberFilter = 'Todos';
 
 // Selectors
 const todoList = document.getElementById('todo-list');
@@ -23,6 +24,32 @@ const navItems = document.querySelectorAll('.nav-item');
 const views = document.querySelectorAll('.app-view');
 const logoutBtn = document.getElementById('logout-btn');
 
+// --- Audio System (Web Audio API) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    if (type === 'success') {
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+        oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.3);
+    } else if (type === 'move') {
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.1);
+    }
+}
+
 // Load Tasks from MongoDB
 async function loadTasksFromServer() {
     try {
@@ -31,11 +58,50 @@ async function loadTasksFromServer() {
             tasks = await response.json();
             renderAllViews();
             updateProductivityStats();
+            updateGlobalProgress();
+            renderMemberFilters();
         }
     } catch (error) {
         console.error('Erro ao carregar:', error);
     }
 }
+
+function updateGlobalProgress() {
+    const done = tasks.filter(t => t.status === 'done').length;
+    const total = tasks.length;
+    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+
+    const bar = document.getElementById('global-progress-bar');
+    const text = document.getElementById('global-progress-percent');
+
+    if (bar) bar.style.width = percent + '%';
+    if (text) text.textContent = percent + '%';
+}
+
+function renderMemberFilters() {
+    const container = document.getElementById('member-initials-filters');
+    if (!container) return;
+
+    const team = [...new Set(tasks.map(t => t.assignee))].filter(m => m && m !== 'Membro');
+
+    let html = `<div class="member-chip ${currentMemberFilter === 'Todos' ? 'active' : ''}" onclick="filterByMember('Todos')" title="Ver todos">All</div>`;
+
+    team.forEach(name => {
+        const initials = getInitials(name);
+        html += `<div class="member-chip ${currentMemberFilter === name ? 'active' : ''}" 
+                      style="background-color: ${getUserColor(name)}" 
+                      onclick="filterByMember('${name}')" 
+                      title="${name}">${initials}</div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+window.filterByMember = function (member) {
+    currentMemberFilter = member;
+    renderMemberFilters();
+    renderTasks(searchInput.value);
+};
 
 function renderAllViews() {
     renderTasks(searchInput ? searchInput.value : '');
@@ -86,7 +152,6 @@ function switchView(viewId) {
     if (viewEl) viewEl.classList.add('active');
     if (navEl) navEl.classList.add('active');
 
-    // Make sure data is fresh when switching
     renderAllViews();
 }
 
@@ -123,7 +188,8 @@ function renderTasks(filterText = '') {
         const matchesCategory = filter === 'Todos' ||
             (filter === 'Urgentes' && t.priority === 'high') ||
             (filter === 'Pendentes' && t.status !== 'done');
-        return matchesSearch && matchesCategory;
+        const matchesMember = currentMemberFilter === 'Todos' || t.assignee === currentMemberFilter;
+        return matchesSearch && matchesCategory && matchesMember;
     });
 
     filtered.forEach(task => {
@@ -138,18 +204,34 @@ function renderTasks(filterText = '') {
 function createTaskCard(task) {
     const div = document.createElement('div');
     div.className = 'task-card';
+
+    // Check for deadline alerts
+    if (task.endDate && task.status !== 'done') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const deadline = new Date(task.endDate);
+        const diffTime = deadline - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) div.classList.add('urgent-deadline'); // Expired
+        else if (diffDays <= 1) div.classList.add('urgent-deadline'); // Today or Tomorrow
+        else if (diffDays <= 3) div.classList.add('warning-deadline'); // Approaching
+    }
+
     div.draggable = true;
     div.dataset.id = task.id;
 
     div.ondragstart = (e) => {
         e.dataTransfer.setData('text/plain', task.id);
         div.classList.add('dragging');
+        if (audioCtx.state === 'suspended') audioCtx.resume();
     };
     div.ondragend = () => div.classList.remove('dragging');
 
     div.innerHTML = `
         <div class="task-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
             <span class="task-priority priority-${task.priority}">${task.priority}</span>
+            ${div.classList.contains('urgent-deadline') ? '<span style="color:var(--urgent); font-size: 0.7rem; font-weight:700;"><i class="fas fa-fire"></i> URGENTE</span>' : ''}
         </div>
         <h3 style="margin-bottom: 0.5rem; font-size: 1rem;">${task.title}</h3>
         <p class="task-description" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">${task.description || ''}</p>
@@ -169,7 +251,6 @@ function createTaskCard(task) {
 }
 
 async function saveTasks(task, method = 'POST') {
-    // Filter out _id to prevent MongoDB errors
     const payload = { ...task };
     delete payload._id;
 
@@ -190,9 +271,23 @@ async function saveTasks(task, method = 'POST') {
 window.moveTask = async function (id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const oldStatus = task.status;
     const nextMap = { 'todo': 'in-progress', 'in-progress': 'done', 'done': 'todo' };
     task.status = nextMap[task.status];
-    renderAllViews(); // UI update
+
+    renderAllViews();
+    updateGlobalProgress();
+
+    if (task.status === 'done' && oldStatus !== 'done') {
+        playSound('success');
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#38bdf8', '#10b981', '#f59e0b'] });
+        notifyUser('🎉 Excelente trabalho! Tarefa concluída!');
+    } else {
+        playSound('move');
+    }
+
     await saveTasks(task, 'PUT');
 };
 
@@ -238,8 +333,8 @@ function setupEventListeners() {
                 assignee: document.getElementById('task-assignee').value || 'Membro',
                 startDate: document.getElementById('task-start-date').value,
                 endDate: document.getElementById('task-end-date').value,
-                startTime: document.getElementById('task-start-time') ? document.getElementById('task-start-time').value : '',
-                endTime: document.getElementById('task-end-time') ? document.getElementById('task-end-time').value : ''
+                startTime: '',
+                endTime: ''
             };
             if (editingTaskId) await saveTasks({ ...tasks.find(t => t.id == editingTaskId), ...data }, 'PUT');
             else await saveTasks({ ...data, id: Date.now().toString(), status: 'todo' }, 'POST');
@@ -251,11 +346,23 @@ function setupEventListeners() {
         column.addEventListener('dragover', (e) => e.preventDefault());
         column.addEventListener('drop', async (e) => {
             e.preventDefault();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const id = e.dataTransfer.getData('text/plain');
             const task = tasks.find(t => t.id == id);
             if (task && task.status !== column.id) {
+                const oldStatus = task.status;
                 task.status = column.id;
                 renderAllViews();
+                updateGlobalProgress();
+
+                if (task.status === 'done' && oldStatus !== 'done') {
+                    playSound('success');
+                    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#38bdf8', '#10b981', '#f59e0b'] });
+                    notifyUser('🎉 Tarefa finalizada!');
+                } else {
+                    playSound('move');
+                }
+
                 await saveTasks(task, 'PUT');
             }
         });
@@ -303,7 +410,7 @@ function renderTeam() {
     const grid = document.getElementById('team-stats-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    const team = [...new Set(tasks.map(t => t.assignee))];
+    const team = [...new Set(tasks.map(t => t.assignee))].filter(m => m && m !== 'Membro');
     team.forEach(m => {
         const card = document.createElement('div');
         card.className = 'team-card';

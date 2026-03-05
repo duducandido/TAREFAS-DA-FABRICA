@@ -55,6 +55,15 @@
                 <div class="header-clock" id="digital-clock">
                     00:00:00
                 </div>
+                <div class="global-progress-wrapper" id="global-progress-container">
+                    <div class="global-progress-label">
+                        <span>Progresso Geral</span>
+                        <span id="global-progress-percent">0%</span>
+                    </div>
+                    <div class="global-progress-bg">
+                        <div class="global-progress-fill" id="global-progress-bar"></div>
+                    </div>
+                </div>
                 <div class="header-actions">
                     <button id="theme-toggle"><i class="fas fa-moon"></i></button>
                     <button class="btn btn-primary" id="open-modal-btn">
@@ -65,7 +74,12 @@
 
             <div id="view-dashboard" class="app-view active">
                 <div class="dashboard-header">
-                    <h1>Gerenciamento de Equipe</h1>
+                    <div>
+                        <h1>Gerenciamento de Equipe</h1>
+                        <div class="member-filters" id="member-initials-filters">
+                            <!-- Member chips go here -->
+                        </div>
+                    </div>
                     <div class="board-filters">
                         <span class="filter active">Todos</span>
                         <span class="filter">Urgentes</span>
