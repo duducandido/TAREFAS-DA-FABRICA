@@ -4,28 +4,6 @@ if (!localStorage.getItem('isLoggedIn') && !window.location.href.includes('login
 }
 
 // State Management
-let tasks = [];
-
-// Initialize
-async function init() {
-    await loadTasksFromServer();
-    setupEventListeners();
-    switchView('dashboard');
-}
-
-async function loadTasksFromServer() {
-    try {
-        const response = await fetch('/api/tasks');
-        if (response.ok) {
-            tasks = await response.json();
-            renderTasks();
-            updateProductivityStats();
-        }
-    } catch (error) {
-        console.error('Erro ao carregar tarefas:', error);
-        notifyUser('Erro ao conectar com o banco de dados');
-    }
-}
 const currentUser = 'Eduardo';
 const teamMembers = [
     { name: 'Eduardo', role: 'Líder do Time', photo: 'Eduardo' },
@@ -34,6 +12,24 @@ const teamMembers = [
     { name: 'Beatriz', role: 'Controle de Qualidade', photo: 'Beatriz' }
 ];
 
+let tasks = [];
+
+// Load Tasks from MongoDB
+async function loadTasksFromServer() {
+    try {
+        const response = await fetch('/api/tasks');
+        if (response.ok) {
+            tasks = await response.json();
+            renderTasks();
+            updateProductivityStats();
+        } else {
+            console.error('Falha na resposta da API');
+        }
+    } catch (error) {
+        console.error('Erro ao carregar tarefas:', error);
+        notifyUser('Conectando ao banco de dados...');
+    }
+}
 // Selectors
 const todoList = document.getElementById('todo-list');
 const progressList = document.getElementById('progress-list');
@@ -52,10 +48,9 @@ const views = document.querySelectorAll('.app-view');
 // We'll use a small "ping" for notifications later if desired, but let's stick to visuals for now to avoid large assets.
 
 // Initialize
-function init() {
-    renderTasks();
-    updateProductivityStats();
+async function init() {
     setupEventListeners();
+    await loadTasksFromServer();
 
     // Default view
     switchView('dashboard');
@@ -387,7 +382,7 @@ document.querySelectorAll('.column').forEach(column => {
     column.ondragleave = (e) => column.classList.remove('drag-over');
 });
 
-function drop(ev) {
+async function drop(ev) {
     ev.preventDefault();
     ev.currentTarget.classList.remove('drag-over');
     const id = ev.dataTransfer.getData('text/plain');
@@ -409,7 +404,7 @@ function drop(ev) {
             notifyUser('Status atualizado');
         }
 
-        saveTasks();
+        await saveTasks(task, 'PUT');
         renderTasks(searchInput.value);
         updateProductivityStats();
     }
