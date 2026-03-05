@@ -35,39 +35,74 @@
 
                 <div class="login-actions">
                     <button type="submit" class="btn btn-login-primary">Entrar</button>
-                    <button type="button" class="btn btn-login-outline" id="test-login">Login de Teste
-                        (Offline)</button>
                 </div>
             </form>
 
             <div class="login-footer">
-                <p>Não tem uma conta? <a href="#">Primeiro acesso/Cadastrar</a></p>
+                <p>Primeiro acesso? <a href="#">Configure sua conta aqui</a></p>
             </div>
         </div>
     </div>
 
     <script>
-        // Simple login simulation
+        // Production Login/Register simulation
         const loginForm = document.getElementById('login-form');
         const emailInput = document.getElementById('email');
+        const submitBtn = document.querySelector('.btn-login-primary');
+        const heading = document.querySelector('.login-card h1');
+        const subtitle = document.querySelector('.subtitle');
+        const toggleLink = document.querySelector('.login-footer a');
+        const footerText = document.querySelector('.login-footer p');
+
+        let isRegisterMode = false;
+
+        function formatNameFromEmail(email) {
+            const handle = email.split('@')[0];
+            // Replace dots/dashes with spaces and capitalize each word
+            return handle.split(/[.\-_]/).map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        }
+
+        toggleLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            isRegisterMode = !isRegisterMode;
+
+            if (isRegisterMode) {
+                heading.textContent = 'Configurar Acesso';
+                subtitle.textContent = 'Use seu e-mail corporativo Zello';
+                submitBtn.textContent = 'Finalizar Configuração';
+                footerText.innerHTML = 'Já configurou sua conta? <a href="#">Fazer login</a>';
+            } else {
+                heading.textContent = 'Bem-vindo';
+                subtitle.textContent = 'Acesse o painel do setor';
+                submitBtn.textContent = 'Entrar';
+                footerText.innerHTML = 'Primeiro acesso? <a href="#">Configure sua conta aqui</a>';
+            }
+
+            // Re-assign listener to the new link
+            document.querySelector('.login-footer a').onclick = (ev) => {
+                ev.preventDefault();
+                toggleLink.dispatchEvent(new Event('click'));
+            };
+        });
 
         loginForm.addEventListener('submit', function (e) {
             e.preventDefault();
             const email = emailInput.value;
-            const userName = email.split('@')[0]; // Simple way to get a name
+            const userName = formatNameFromEmail(email);
 
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('userEmail', email);
-            localStorage.setItem('userName', userName.charAt(0).toUpperCase() + userName.slice(1));
+            submitBtn.textContent = isRegisterMode ? 'Configurando...' : 'Autenticando...';
+            submitBtn.disabled = true;
 
-            window.location.href = 'index.html';
-        });
+            setTimeout(() => {
+                localStorage.setItem('isLoggedIn', 'true');
+                localStorage.setItem('userEmail', email);
+                localStorage.setItem('userName', userName);
 
-        document.getElementById('test-login').addEventListener('click', function () {
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('userEmail', 'teste@fabrica.com');
-            localStorage.setItem('userName', 'Visitante');
-            window.location.href = 'index.html';
+                if (isRegisterMode) alert('Boas-vindas, ' + userName + '! Sua conta Zello foi configurada.');
+                window.location.href = 'index.html';
+            }, 800);
         });
     </script>
 </body>
