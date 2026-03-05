@@ -5,14 +5,8 @@ if (!localStorage.getItem('isLoggedIn') && !window.location.href.includes('login
 
 // State Management
 let currentUser = localStorage.getItem('userName') || 'Eduardo';
-const teamMembers = [
-    { name: 'Eduardo', role: 'Líder do Time', photo: 'Eduardo' },
-    { name: 'Julia', role: 'Designer UI/UX', photo: 'Julia' },
-    { name: 'Carlos', role: 'Engenheiro de Processos', photo: 'Carlos' },
-    { name: 'Beatriz', role: 'Controle de Qualidade', photo: 'Beatriz' }
-];
-
 let tasks = [];
+let editingTaskId = null;
 
 // Load Tasks from MongoDB
 async function loadTasksFromServer() {
@@ -66,6 +60,18 @@ async function init() {
 
     // Default view
     switchView('dashboard');
+
+    // Start Clock
+    setInterval(updateClock, 1000);
+    updateClock();
+}
+
+function updateClock() {
+    const now = new Date();
+    const clockEl = document.getElementById('digital-clock');
+    if (clockEl) {
+        clockEl.textContent = now.toLocaleTimeString('pt-BR', { hour12: false });
+    }
 }
 
 function switchView(viewId) {
@@ -186,8 +192,6 @@ async function saveTasks(task, method = 'POST') {
 }
 
 // Task Actions
-let editingTaskId = null;
-
 async function deleteTask(id) {
     if (confirm('Deseja excluir esta tarefa?')) {
         try {
@@ -243,10 +247,19 @@ function renderMyTasks() {
 
 function renderTeam() {
     const grid = document.getElementById('team-stats-grid');
+    if (!grid) return;
     grid.innerHTML = '';
 
-    teamMembers.forEach(member => {
-        const memberTasks = tasks.filter(t => t.assignee === member.name);
+    // Extract unique assignees from existing tasks
+    const assignees = [...new Set(tasks.map(t => t.assignee).filter(name => name && name !== 'Membro'))];
+
+    if (assignees.length === 0) {
+        grid.innerHTML = '<p class="text-muted" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Aguardando atribuição de tarefas para exibir a equipe.</p>';
+        return;
+    }
+
+    assignees.forEach(name => {
+        const memberTasks = tasks.filter(t => t.assignee === name);
         const completed = memberTasks.filter(t => t.status === 'done').length;
         const total = memberTasks.length;
         const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
@@ -254,13 +267,13 @@ function renderTeam() {
         const card = document.createElement('div');
         card.className = 'team-card';
         card.innerHTML = `
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${member.photo}" alt="${member.name}">
-            <h3>${member.name}</h3>
-            <span class="role">${member.role}</span>
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${name}" alt="${name}">
+            <h3>${name}</h3>
+            <span class="role">${name === currentUser ? 'Você' : 'Membro da Equipe'}</span>
             <div class="progress-bar-container">
                 <div class="progress-bar" style="width: ${progress}%"></div>
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
                 ${completed}/${total} Tarefas Concluídas
             </div>
         `;
@@ -294,7 +307,34 @@ function updateProductivityStats() {
 // Event Listeners
 function setupEventListeners() {
     // Modal
-    openModalBtn.onclick = () => taskModal.style.display = 'flex';
+    openModalBtn.onclick = () => {
+        taskModal.style.display = 'flex';
+        taskForm.reset();
+        editingTaskId = null;
+        document.querySelector('.modal-header h3').textContent = 'Criar Nova Tarefa';
+
+        // Auto-fill current date and time
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+
+        const dateString = `${year}-${month}-${day}`;
+        const timeString = `${hours}:${minutes}`;
+
+        document.getElementById('task-start-date').value = dateString;
+        document.getElementById('task-start-time').value = timeString;
+        document.getElementById('task-end-date').value = dateString;
+
+        // Default end time is 1 hour later
+        const endHours = String((now.getHours() + 1) % 24).padStart(2, '0');
+        document.getElementById('task-end-time').value = `${endHours}:${minutes}`;
+
+        // Auto-fill assignee with current user
+        document.getElementById('task-assignee').value = currentUser;
+    };
     closeModalBtn.onclick = () => taskModal.style.display = 'none';
     window.onclick = (e) => { if (e.target === taskModal) taskModal.style.display = 'none'; };
 
